@@ -1,0 +1,505 @@
+/* ============================================
+   SHEHAN YOW - TIKTOK TEAM PORTAL
+   JavaScript Functionality
+   ============================================ */
+
+document.addEventListener('DOMContentLoaded', function() {
+    initParticles();
+    initNavigation();
+    initForms();
+    initPasswordToggle();
+    initFileInput();
+    initDashboard();
+});
+
+/* ============================================
+   PARTICLE SYSTEM
+   ============================================ */
+function initParticles() {
+    const canvas = document.getElementById('particleCanvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let animationId;
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    class Particle {
+        constructor() {
+            this.reset();
+        }
+
+        reset() {
+            this.x = Math.random() * canvas.width;
+            this.y = Math.random() * canvas.height;
+            this.size = Math.random() * 2 + 0.5;
+            this.speedX = (Math.random() - 0.5) * 0.5;
+            this.speedY = (Math.random() - 0.5) * 0.5;
+            this.opacity = Math.random() * 0.5 + 0.1;
+            // Cyan or Pink color
+            this.color = Math.random() > 0.5 ? '#00f2ea' : '#ff0050';
+        }
+
+        update() {
+            this.x += this.speedX;
+            this.y += this.speedY;
+
+            if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+            if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.globalAlpha = this.opacity;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Create particles
+    const particleCount = Math.min(window.innerWidth / 10, 100);
+    for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+    }
+
+    // Draw connections
+    function drawConnections() {
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < 100) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(0, 242, 234, 0.1)';
+                    ctx.lineWidth = 0.5;
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+        drawConnections();
+        animationId = requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Cleanup on page hide
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            cancelAnimationFrame(animationId);
+        } else {
+            animate();
+        }
+    });
+}
+
+/* ============================================
+   NAVIGATION
+   ============================================ */
+function initNavigation() {
+    const hamburger = document.querySelector('.hamburger');
+    const navLinks = document.querySelector('.nav-links');
+
+    if (hamburger && navLinks) {
+        hamburger.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+        });
+
+        // Close menu when clicking a link
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+            });
+        });
+    }
+}
+
+/* ============================================
+   FORM VALIDATION & HANDLING
+   ============================================ */
+function initForms() {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+    }
+}
+
+function handleLogin(e) {
+    e.preventDefault();
+    clearErrors();
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const rememberMe = document.getElementById('rememberMe');
+    let isValid = true;
+
+    // Validation
+    if (!username) {
+        showError('usernameError', 'Username is required');
+        isValid = false;
+    }
+
+    if (!password) {
+        showError('passwordError', 'Password is required');
+        isValid = false;
+    } else if (password.length < 6) {
+        showError('passwordError', 'Password must be at least 6 characters');
+        isValid = false;
+    }
+
+    if (!isValid) {
+        showToast('Please fix the errors above', 'error');
+        return;
+    }
+
+    // Check if user exists in localStorage
+    const users = JSON.parse(localStorage.getItem('sy_users') || '[]');
+    const user = users.find(u => u.tiktokUsername === username || u.email === username);
+
+    if (!user || user.password !== password) {
+        showToast('Invalid username or password', 'error');
+        return;
+    }
+
+    // Show loading
+    const btn = document.getElementById('loginBtn');
+    setLoading(btn, true);
+
+    // Simulate API call
+    setTimeout(() => {
+        setLoading(btn, false);
+
+        // Save session
+        const session = {
+            ...user,
+            loginTime: new Date().toISOString()
+        };
+        localStorage.setItem('sy_currentUser', JSON.stringify(session));
+
+        if (rememberMe && rememberMe.checked) {
+            localStorage.setItem('sy_remember', 'true');
+        }
+
+        // Show success modal
+        document.getElementById('successModal').classList.remove('hidden');
+    }, 1500);
+}
+
+function handleRegister(e) {
+    e.preventDefault();
+    clearErrors();
+
+    const fullName = document.getElementById('fullName').value.trim();
+    const tiktokUsername = document.getElementById('tiktokUsername').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const country = document.getElementById('country').value;
+    const password = document.getElementById('regPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const acceptTerms = document.getElementById('acceptTerms');
+    const profilePicInput = document.getElementById('profilePic');
+
+    let isValid = true;
+
+    // Validate fields
+    if (!fullName || fullName.length < 2) {
+        showError('fullNameError', 'Full name is required (min 2 chars)');
+        isValid = false;
+    }
+
+    if (!tiktokUsername) {
+        showError('tiktokUsernameError', 'TikTok username is required');
+        isValid = false;
+    } else if (!tiktokUsername.startsWith('@')) {
+        showError('tiktokUsernameError', 'Username must start with @');
+        isValid = false;
+    }
+
+    if (!email || !isValidEmail(email)) {
+        showError('emailError', 'Valid email is required');
+        isValid = false;
+    }
+
+    if (!phone || phone.length < 8) {
+        showError('phoneError', 'Valid phone number is required');
+        isValid = false;
+    }
+
+    if (!country) {
+        showError('countryError', 'Please select a country');
+        isValid = false;
+    }
+
+    if (!password || password.length < 6) {
+        showError('regPasswordError', 'Password must be at least 6 characters');
+        isValid = false;
+    }
+
+    if (password !== confirmPassword) {
+        showError('confirmPasswordError', 'Passwords do not match');
+        isValid = false;
+    }
+
+    if (!acceptTerms.checked) {
+        showError('termsError', 'You must accept the terms');
+        isValid = false;
+    }
+
+    if (!isValid) {
+        showToast('Please fix the errors above', 'error');
+        return;
+    }
+
+    // Check if username/email already exists
+    const users = JSON.parse(localStorage.getItem('sy_users') || '[]');
+    if (users.some(u => u.tiktokUsername === tiktokUsername)) {
+        showError('tiktokUsernameError', 'This username is already taken');
+        return;
+    }
+    if (users.some(u => u.email === email)) {
+        showError('emailError', 'This email is already registered');
+        return;
+    }
+
+    // Process profile picture
+    let profilePicBase64 = null;
+    const processUser = () => {
+        const newUser = {
+            id: Date.now(),
+            fullName,
+            tiktokUsername,
+            email,
+            phone,
+            country,
+            password,
+            memberId: generateMemberId(),
+            registrationDate: new Date().toISOString(),
+            profilePic: profilePicBase64
+        };
+
+        users.push(newUser);
+        localStorage.setItem('sy_users', JSON.stringify(users));
+
+        // Show success
+        const btn = document.getElementById('registerBtn');
+        setLoading(btn, true);
+
+        setTimeout(() => {
+            setLoading(btn, false);
+            document.getElementById('registerModal').classList.remove('hidden');
+        }, 1500);
+    };
+
+    if (profilePicInput.files && profilePicInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            profilePicBase64 = e.target.result;
+            processUser();
+        };
+        reader.readAsDataURL(profilePicInput.files[0]);
+    } else {
+        processUser();
+    }
+}
+
+/* ============================================
+   PASSWORD TOGGLE
+   ============================================ */
+function initPasswordToggle() {
+    const toggles = [
+        { btn: 'togglePassword', input: 'password' },
+        { btn: 'toggleRegPassword', input: 'regPassword' }
+    ];
+
+    toggles.forEach(({ btn, input }) => {
+        const button = document.getElementById(btn);
+        const field = document.getElementById(input);
+
+        if (button && field) {
+            button.addEventListener('click', () => {
+                const type = field.getAttribute('type') === 'password' ? 'text' : 'password';
+                field.setAttribute('type', type);
+                button.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+            });
+        }
+    });
+}
+
+/* ============================================
+   FILE INPUT LABEL
+   ============================================ */
+function initFileInput() {
+    const fileInput = document.getElementById('profilePic');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const label = this.parentElement.querySelector('.file-label');
+            if (this.files && this.files[0]) {
+                label.textContent = this.files[0].name;
+                label.style.color = '#00f2ea';
+            } else {
+                label.textContent = 'Choose image...';
+                label.style.color = 'rgba(255, 255, 255, 0.3)';
+            }
+        });
+    }
+}
+
+/* ============================================
+   DASHBOARD
+   ============================================ */
+function initDashboard() {
+    if (!document.querySelector('.dashboard-section')) return;
+
+    const user = JSON.parse(localStorage.getItem('sy_currentUser'));
+    if (!user) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // Populate dashboard
+    document.getElementById('dashName').textContent = user.fullName.split(' ')[0];
+    document.getElementById('dashFullName').textContent = user.fullName;
+    document.getElementById('dashTiktok').textContent = user.tiktokUsername;
+    document.getElementById('dashMemberId').textContent = user.memberId;
+    document.getElementById('dashRegDate').textContent = formatDate(user.registrationDate);
+    document.getElementById('dashCountry').textContent = user.country;
+
+    // Set profile picture if exists
+    const avatar = document.getElementById('dashAvatar');
+    if (user.profilePic) {
+        avatar.innerHTML = `<img src="${user.profilePic}" alt="Profile">`;
+    }
+
+    // Set current date
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+}
+
+/* ============================================
+   UTILITY FUNCTIONS
+   ============================================ */
+function showError(elementId, message) {
+    const el = document.getElementById(elementId);
+    if (el) el.textContent = message;
+}
+
+function clearErrors() {
+    document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function generateMemberId() {
+    const prefix = 'SY';
+    const random = Math.floor(100000 + Math.random() * 900000);
+    return `${prefix}-${random}`;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function setLoading(button, loading) {
+    const text = button.querySelector('.btn-text');
+    const spinner = button.querySelector('.spinner');
+
+    if (loading) {
+        text.classList.add('hidden');
+        spinner.classList.remove('hidden');
+        button.disabled = true;
+        button.style.opacity = '0.8';
+    } else {
+        text.classList.remove('hidden');
+        spinner.classList.add('hidden');
+        button.disabled = false;
+        button.style.opacity = '1';
+    }
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    const icon = type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+    toast.innerHTML = `<i class="fas ${icon}"></i> <span>${message}</span>`;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+/* ============================================
+   REDIRECTS
+   ============================================ */
+function redirectToDashboard() {
+    window.location.href = 'dashboard.html';
+}
+
+function redirectToLogin() {
+    window.location.href = 'login.html';
+}
+
+function logout() {
+    localStorage.removeItem('sy_currentUser');
+    localStorage.removeItem('sy_remember');
+    showToast('Logged out successfully', 'success');
+    setTimeout(() => {
+        window.location.href = 'login.html';
+    }, 1000);
+}
+
+// Check auth state on page load
+(function checkAuth() {
+    const currentUser = localStorage.getItem('sy_currentUser');
+    const isDashboard = document.querySelector('.dashboard-section');
+    const isAuthPage = document.querySelector('.auth-section');
+
+    // Redirect to login if accessing dashboard without auth
+    if (isDashboard && !currentUser) {
+        window.location.href = 'login.html';
+    }
+
+    // Redirect to dashboard if already logged in and on auth page
+    if (isAuthPage && currentUser && !window.location.href.includes('dashboard')) {
+        // Only auto-redirect from login page, not when explicitly visiting it
+        if (window.location.href.includes('login.html')) {
+            const remembered = localStorage.getItem('sy_remember');
+            if (remembered) {
+                // Stay on login page but could auto-fill
+            }
+        }
+    }
+})();
